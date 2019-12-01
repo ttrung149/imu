@@ -1,38 +1,99 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-const int MPU_addr = 0x68;  // I2C address of the MPU-6050
+#define MPU6050_ADDR 0x68
+#define LOOP_PERIOD 4000
 
-int16_t AcX, AcY, AcZ, Tmp, GyX, GyY, GyZ;
+static int16_t acx, acy, acz, tmp, gyx, gyy, gyz;
+static int16_t offset_gyx = 0, offset_gyy = 0, offset_gyz = 0;
+static uint32_t _micros;
+
+static float degrees_pitch_acc, degrees_roll_acc;
+static float acc_vector;
+static float degrees_pitch = 0, degrees_roll  = 0;
+
+void read_MPU6050() {
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x3B);
+    Wire.endTransmission();
+    Wire.requestFrom(MPU6050_ADDR, 14);
+
+    // Fetches accelerometer values
+    acx = Wire.read() << 8 | Wire.read();
+    acy = Wire.read() << 8 | Wire.read();
+    acz = Wire.read() << 8 | Wire.read();
+
+    // Gets temperature value
+    tmp = Wire.read() << 8 | Wire.read();
+
+    // Fetches gyro values
+    gyx = Wire.read() << 8 | Wire.read();
+    gyy = Wire.read() << 8 | Wire.read(); 
+    gyz = Wire.read() << 8 | Wire.read(); 
+}
+
+void calibirate_MPU6050(int num_iterations) {
+    Serial.println("Calibrating MPU6050");
+    for (int i = 0; i < num_iterations; i++) {
+        if (i % 100 == 0) Serial.print(".");
+        read_MPU6050();
+        offset_gyx += gyx;
+        offset_gyy += gyy;
+        offset_gyz += gyz;
+    }
+
+    offset_gyx /= num_iterations;
+    offset_gyy /= num_iterations;
+    offset_gyz /= num_iterations;
+}
+
 void setup(){
     Wire.begin();
-    Wire.beginTransmission(MPU_addr);
-    Wire.write(0x6B);  // PWR_MGMT_1 register
-    Wire.write(0);     //3 set to zero (wakes up the MPU-6050)
-    Wire.endTransmission(true);
-    Serial.begin(9600);
-}
-void loop(){
-    Wire.beginTransmission(MPU_addr);
-    Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU_addr,14,true);    // request a total of 14 registers
-    
-    AcX = Wire.read() << 8 | Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)  
-    AcY = Wire.read() << 8 | Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
-    AcZ = Wire.read() << 8 | Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
-    Tmp = Wire.read() << 8 | Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
-    GyX = Wire.read() << 8 | Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
-    GyY = Wire.read() << 8 | Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
-    GyZ = Wire.read() << 8 | Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L)
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x6B);                      // PWR_MGMT_1 register (6B hex)
+    Wire.write(0x00);                      // Activate the gyro.
+    Wire.endTransmission(); 
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x1B);                        // GYRO_CONFIG register (1B hex)
+    Wire.write(0x08);                        // Set 500dps full scale
+    Wire.endTransmission();
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x1C);                        // ACCEL_CONFIG register (1A hex)
+    Wire.write(0x10);                        // (+/- 8g full scale range)
+    Wire.endTransmission();
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(0x1A);                        // CONFIG register (1A hex)
+    Wire.write(0x03);                        // Set Digital LPF to ~43Hz
+    Wire.endTransmission();   
 
-    Serial.print("AcX = "); Serial.print(AcX);
-    Serial.print(" | AcY = "); Serial.print(AcY);
-    Serial.print(" | AcZ = "); Serial.print(AcZ);
-    //equation for temperature in degrees C from datasheet
-    Serial.print(" | Tmp = "); Serial.print(Tmp/340.00+36.53);  
-    Serial.print(" | GyX = "); Serial.print(GyX);
-    Serial.print(" | GyY = "); Serial.print(GyY);
-    Serial.print(" | GyZ = "); Serial.println(GyZ);
-    delay(333);
+    Serial.begin(115200);
+    
+    calibirate_MPU6050(3000);
+    _micros = micros();
+}
+
+void loop(){
+    read_MPU6050();
+    gyx -= offset_gyx;
+    gyy -= offset_gyy;
+    gyz -= offset_gyz;
+
+    degrees_pitch += gyy * 0.0000610687;
+    degrees_roll  += gyx * 0.0000610687;
+
+    degrees_pitch += degrees_roll * sin(gyz * 0.000001066);
+    degrees_roll  -= degrees_pitch * sin(gyz * 0.000001066);
+    
+    acc_vector = sqrt((acx * acx) + (acy * acy) + (acz * acz));
+    degrees_pitch_acc = asin((float) acy/acc_vector) * 57.2957795;
+    degrees_roll_acc  = asin((float) acx/acc_vector) * -57.2957795;
+
+    degrees_pitch = degrees_pitch * 0.98 + degrees_pitch_acc * 0.02;
+    degrees_roll  = degrees_roll * 0.98 + degrees_roll_acc * 0.02;
+
+    Serial.print("Pitch: "); Serial.print(degrees_pitch);
+    Serial.print(" | Roll: "); Serial.println(degrees_roll);
+    
+    while(micros() < _micros + LOOP_PERIOD);
+    _micros = micros();  
 }
