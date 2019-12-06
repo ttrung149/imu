@@ -1,0 +1,9 @@
+IMU with STM32F1
+================
+
+Description: Convert MPU6050 raw gyro and accelerometer values to pitch and
+yaw degrees. Complementary filter was used to smoothen the calibrated output.
+
+To install and run on local machine, clone this repo, and set up PlatformIO
+accordingly to the STM32F1 Blue Pill board.
+
