@@ -7,3 +7,5 @@ yaw degrees. Complementary filter was used to smoothen the calibrated output.
 To install and run on local machine, clone this repo, and set up PlatformIO
 accordingly to the STM32F1 Blue Pill board.
 
+This branch use the `STM32duino` framework. For one that uses the standardized
+HAL, check out the `hal` branch.

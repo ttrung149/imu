@@ -84,7 +84,6 @@ void loop(){
 
     degrees_pitch += gyy * 0.0000610687;
     degrees_roll  += gyx * 0.0000610687;
-    // degrees_yaw   += gyz * 0.0000610687;
 
     degrees_pitch += degrees_roll * sin(gyz * 0.000001066);
     degrees_roll  -= degrees_pitch * sin(gyz * 0.000001066);
@@ -93,15 +92,11 @@ void loop(){
     degrees_pitch_acc = asin((float) acy/acc_vector) * 57.2957795;
     degrees_roll_acc  = asin((float) acx/acc_vector) * -57.2957795;
     
-    // degrees_yaw_acc = asin((float) acz/acc_vector) * 57.2957795;
-
     degrees_pitch = degrees_pitch * 0.97 + degrees_pitch_acc * 0.03;
     degrees_roll  = degrees_roll * 0.97 + degrees_roll_acc * 0.03;
-    // degrees_yaw  = degrees_yaw * 0.97 + degrees_yaw_acc * 0.03;
 
     Serial.print("Pitch: "); Serial.print(degrees_pitch);
     Serial.print(" | Roll: "); Serial.println(degrees_roll);
-    // Serial.print(" | Yaw: "); Serial.println(degrees_yaw);
     
     while(micros() < _micros + LOOP_PERIOD);
     _micros = micros();  
