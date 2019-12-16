@@ -1,0 +1,12 @@
+IMU with STM32F1
+================
+
+Description: Convert MPU6050 raw gyro and accelerometer values to pitch and
+yaw degrees. Complementary filter was used to smoothen the calibrated output.
+
+To install and run on local machine, make sure st-link tools are setup.
+
+`make upload` => upload to board
+
+This branch uses the `HAL` framework. For one that uses the `Arduino` framework, 
+check out the `arduino` branch.
